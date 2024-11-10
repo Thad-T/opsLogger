@@ -5,6 +5,8 @@ VisualStudioVersion = 17.11.35327.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "main", "main.vcxproj", "{9E2177B4-D9CF-4EF0-A0D1-1CDD331A8AB2}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HookingDll", "..\HookingDll\HookingDll.vcxproj", "{E2550E17-05D0-4AFC-AACD-1379524E346B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{9E2177B4-D9CF-4EF0-A0D1-1CDD331A8AB2}.Release|x64.Build.0 = Release|x64
 		{9E2177B4-D9CF-4EF0-A0D1-1CDD331A8AB2}.Release|x86.ActiveCfg = Release|Win32
 		{9E2177B4-D9CF-4EF0-A0D1-1CDD331A8AB2}.Release|x86.Build.0 = Release|Win32
+		{E2550E17-05D0-4AFC-AACD-1379524E346B}.Debug|x64.ActiveCfg = Debug|x64
+		{E2550E17-05D0-4AFC-AACD-1379524E346B}.Debug|x64.Build.0 = Debug|x64
+		{E2550E17-05D0-4AFC-AACD-1379524E346B}.Debug|x86.ActiveCfg = Debug|Win32
+		{E2550E17-05D0-4AFC-AACD-1379524E346B}.Debug|x86.Build.0 = Debug|Win32
+		{E2550E17-05D0-4AFC-AACD-1379524E346B}.Release|x64.ActiveCfg = Release|x64
+		{E2550E17-05D0-4AFC-AACD-1379524E346B}.Release|x64.Build.0 = Release|x64
+		{E2550E17-05D0-4AFC-AACD-1379524E346B}.Release|x86.ActiveCfg = Release|Win32
+		{E2550E17-05D0-4AFC-AACD-1379524E346B}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

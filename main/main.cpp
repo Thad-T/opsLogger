@@ -1,4 +1,6 @@
-#include <windows.h>
+#include "framework.h" // framework.h contains a bunch of includes so any new includes should be added theres
+#include "main.h"
+// i think its best not to change these
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -82,4 +84,79 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     }
 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+
+BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath)
+{
+    SIZE_T nLength;
+    LPVOID lpLoadLibraryW = NULL;
+    LPVOID lpRemoteString;
+    STARTUPINFO startupInfo;
+    PROCESS_INFORMATION processInformation;
+
+    memset(&startupInfo, 0, sizeof(startupInfo));
+    startupInfo.cb = sizeof(STARTUPINFO);
+
+    if (!CreateProcess(targetPath, NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &startupInfo, &processInformation))
+    {
+        PrintError("CreateProcess");
+        return false;
+    }
+
+    lpLoadLibraryW = GetProcAddress(GetModuleHandle(L"KERNEL32.DLL"), "LoadLibraryW");
+    if (!lpLoadLibraryW)
+    {
+        PrintError("GetProcAddress");
+        CloseHandle(&processInformation.hThread);
+        CloseHandle(&processInformation.hProcess);
+        return false;
+    }
+
+    nLength = wcslen(lpcwszDLL) * sizeof(WCHAR);
+    lpRemoteString = VirtualAllocEx(processInformation.hProcess, NULL, nLength + 1, MEM_COMMIT, PAGE_READWRITE);
+    if (!lpRemoteString) 
+    {
+        PrintError("VirtualAllocEx");
+        CloseHandle(&processInformation.hThread);
+        CloseHandle(&processInformation.hProcess);
+        return false;
+    }
+
+    if (!WriteProcessMemory(processInformation.hProcess, lpRemoteString, lpcwszDLL, nLength, NULL))
+    {
+        PrintError("WriteProcessMemory");
+        VirtualFreeEx(processInformation.hProcess, lpRemoteString, 0, MEM_RELEASE);
+        CloseHandle(&processInformation.hThread);
+        CloseHandle(&processInformation.hProcess);
+        return false;
+    }
+
+    HANDLE hThread = CreateRemoteThread(processInformation.hProcess, NULL, NULL, (LPTHREAD_START_ROUTINE)lpLoadLibraryW, lpRemoteString, NULL, NULL);
+    if (!hThread)
+    {
+        PrintError("CreateRemoteThread");
+    }
+    else
+    {
+        WaitForSingleObject(hThread, 4000);
+        ResumeThread(processInformation.hThread);
+    }
+
+    VirtualFreeEx(processInformation.hProcess, lpRemoteString, 0, MEM_RELEASE);
+    CloseHandle(&processInformation.hThread);
+    CloseHandle(&processInformation.hProcess);
+
+    return true;
+}
+
+void PrintError(const char* lpFunction)
+{
+    LPVOID lpMsgBuf;
+    DWORD lastError = GetLastError();
+    FormatMessage(
+        FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+        NULL, lastError, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), (LPWSTR)&lpMsgBuf, 0, NULL);
+
+    MessageBox(NULL, TEXT("%s failed with error code %d: %s", lpFunction, lastError, lpMsgBuf), L"Error", MB_OK);
 }
