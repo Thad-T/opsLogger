@@ -8,7 +8,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
                      )
 {
 
-    static HookManager* manager = new HookManger();
+    static HookManager* manager = new HookManager();
 
     switch (ul_reason_for_call)
     {

@@ -117,6 +117,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -156,12 +157,9 @@
   <ItemGroup>
     <None Include="engine\x64\NtHookEngine.dll" />
     <None Include="engine\x64\NtHookEngine.exp" />
-    <None Include="engine\x86\NtHookEngine.dll" />
-    <None Include="engine\x86\NtHookEngine.exp" />
   </ItemGroup>
   <ItemGroup>
     <Library Include="engine\x64\NtHookEngine.lib" />
-    <Library Include="engine\x86\NtHookEngine.lib" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
