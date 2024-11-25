@@ -9,7 +9,11 @@
 // Windows Header Files
 #include <windows.h>
 // C RunTime Header Files
+#include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
 #include <memory.h>
 #include <tchar.h>
+#include <pathcch.h>
+#include <strsafe.h>
+#include <commdlg.h>

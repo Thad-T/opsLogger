@@ -3,6 +3,11 @@
 // i think its best not to change these
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath, LPCWSTR lpCurrentDir, HWND hwnd);
+void PrintError(const char* lpFunction, HWND hwnd);
+
+wchar_t selfdir[MAX_PATH] = { 0 };
+
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow)
 {
@@ -78,7 +83,33 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_COMMAND: // Handle button click
         if (LOWORD(wParam) == 1) // Check if the button with ID 1 was clicked
         {
-            MessageBox(hwnd, L"i wan die", L"Button Click", MB_OK);
+            GetModuleFileName(NULL, selfdir, MAX_PATH);
+            PathCchRemoveFileSpec(selfdir, MAX_PATH);
+            wchar_t hookingDll[MAX_PATH] = { 0 };
+            PathCchCombineEx(hookingDll, MAX_PATH, selfdir, L"\HookingDll.dll", PATHCCH_NONE);
+
+            wchar_t exePath[MAX_PATH];
+            OPENFILENAME ofn;
+            ZeroMemory(&exePath, sizeof(exePath));
+            ZeroMemory(&ofn, sizeof(ofn));
+            ofn.lStructSize = sizeof(ofn);
+            ofn.hwndOwner = hwnd;
+            ofn.lpstrFilter = L"Executable Files\0*.exe\0Any File\0*.*\0";
+            ofn.lpstrFile = exePath;
+            ofn.nMaxFile = MAX_PATH;
+            ofn.lpstrTitle = L"Select Program to Run";
+            ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
+
+            if (!GetOpenFileNameW(&ofn))
+            {
+                PrintError("GetOpenFileNameW", hwnd);
+                break;
+            }
+
+            if (InjectNewProc(hookingDll, exePath, selfdir, hwnd))
+                MessageBox(hwnd, L"Success", L"Button Click", MB_OK);
+            else
+                MessageBox(hwnd, L"Failed", L"Button Click", MB_OK);
         }
         break;
     }
@@ -87,7 +118,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 }
 
 
-BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath)
+
+BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath, LPCWSTR lpCurrentDir, HWND hwnd)
 {
     SIZE_T nLength;
     LPVOID lpLoadLibraryW = NULL;
@@ -98,16 +130,16 @@ BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath)
     memset(&startupInfo, 0, sizeof(startupInfo));
     startupInfo.cb = sizeof(STARTUPINFO);
 
-    if (!CreateProcess(targetPath, NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &startupInfo, &processInformation))
+    if (!CreateProcess(targetPath, NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, lpCurrentDir, &startupInfo, &processInformation))
     {
-        PrintError("CreateProcess");
+        PrintError("CreateProcess", hwnd);
         return false;
     }
 
     lpLoadLibraryW = GetProcAddress(GetModuleHandle(L"KERNEL32.DLL"), "LoadLibraryW");
     if (!lpLoadLibraryW)
     {
-        PrintError("GetProcAddress");
+        PrintError("GetProcAddress", hwnd);
         CloseHandle(&processInformation.hThread);
         CloseHandle(&processInformation.hProcess);
         return false;
@@ -115,9 +147,9 @@ BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath)
 
     nLength = wcslen(lpcwszDLL) * sizeof(WCHAR);
     lpRemoteString = VirtualAllocEx(processInformation.hProcess, NULL, nLength + 1, MEM_COMMIT, PAGE_READWRITE);
-    if (!lpRemoteString) 
+    if (!lpRemoteString)
     {
-        PrintError("VirtualAllocEx");
+        PrintError("VirtualAllocEx", hwnd);
         CloseHandle(&processInformation.hThread);
         CloseHandle(&processInformation.hProcess);
         return false;
@@ -125,7 +157,7 @@ BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath)
 
     if (!WriteProcessMemory(processInformation.hProcess, lpRemoteString, lpcwszDLL, nLength, NULL))
     {
-        PrintError("WriteProcessMemory");
+        PrintError("WriteProcessMemory", hwnd);
         VirtualFreeEx(processInformation.hProcess, lpRemoteString, 0, MEM_RELEASE);
         CloseHandle(&processInformation.hThread);
         CloseHandle(&processInformation.hProcess);
@@ -135,7 +167,11 @@ BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath)
     HANDLE hThread = CreateRemoteThread(processInformation.hProcess, NULL, NULL, (LPTHREAD_START_ROUTINE)lpLoadLibraryW, lpRemoteString, NULL, NULL);
     if (!hThread)
     {
-        PrintError("CreateRemoteThread");
+        PrintError("CreateRemoteThread", hwnd);
+        VirtualFreeEx(processInformation.hProcess, lpRemoteString, 0, MEM_RELEASE);
+        CloseHandle(&processInformation.hThread);
+        CloseHandle(&processInformation.hProcess);
+        return false;
     }
     else
     {
@@ -150,13 +186,19 @@ BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath)
     return true;
 }
 
-void PrintError(const char* lpFunction)
+void PrintError(const char* lpFunction, HWND hwnd)
 {
     LPVOID lpMsgBuf;
+    LPVOID lpDispBuf;
     DWORD lastError = GetLastError();
     FormatMessage(
         FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
         NULL, lastError, MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US), (LPWSTR)&lpMsgBuf, 0, NULL);
+    lpDispBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlen((LPCTSTR)lpMsgBuf) + 50) * sizeof(TCHAR));
+    StringCchPrintf((LPTSTR)lpDispBuf, LocalSize(lpDispBuf) / sizeof(TCHAR), TEXT("LoadLibrary failed with error code %d: %s"), lastError, (LPWSTR)lpMsgBuf);
 
-    MessageBox(NULL, TEXT("%s failed with error code %d: %s", lpFunction, lastError, lpMsgBuf), L"Error", MB_OK);
+    MessageBox(hwnd, (LPTSTR)lpDispBuf, L"Error", MB_OK);
+
+    LocalFree(lpMsgBuf);
+    LocalFree(lpDispBuf);
 }
