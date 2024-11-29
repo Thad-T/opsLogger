@@ -7,6 +7,8 @@ std::wstring FormatCSV(const std::string& csvContent, const std::string& filenam
 void MonitorFileChanges(HWND hwnd, const std::string& filePath, HWND hEditControl);
 void UpdateFileContent(HWND hwnd, const std::string& filePath, HWND hEditControl);
 void PopulateComboBox(HWND hComboBox, const std::string& directoryPath);
+void RefreshComboBox(HWND hComboBox, const std::string& directoryPath);
+void MonitorDirectoryChanges(HWND hwnd, HWND hComboBox, const std::string& directoryPath);
 std::vector<std::string> GetLogFiles(const std::string& directoryPath);
 // Global variable to track the file size for change detection
 std::atomic<long> totalFileSize(0);
@@ -96,8 +98,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
 
     // Monitor the log file for changes in a separate thread
     std::string directoryPath = "."; // Current directory
-    std::thread monitorThread(MonitorFileChanges, hwnd, directoryPath, hEditControl);
-    monitorThread.detach(); // Detach the thread to run in the background
+    std::thread directoryMonitorThread(MonitorDirectoryChanges, hwnd, hComboBox, ".");
+    directoryMonitorThread.detach();
+    std::thread fileMonitorThread(MonitorFileChanges, hwnd, directoryPath, hEditControl);
+    fileMonitorThread.detach();
 
     MSG msg = {};
     while (GetMessage(&msg, NULL, 0, 0))
@@ -111,8 +115,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+    HWND hComboBox = GetDlgItem(hwnd, 3);
     switch (uMsg)
     {
+    case WM_USER + 1: // Custom message for refreshing the combobox
+        if (hComboBox != NULL)
+        {
+            RefreshComboBox(hComboBox, ".");
+        }
+        break;
     case WM_DESTROY:
         PostQuitMessage(0);
         return 0;
@@ -479,4 +490,34 @@ void PopulateComboBox(HWND hComboBox, const std::string& directoryPath)
         SendMessage(hComboBox, CB_ADDSTRING, 0, (LPARAM)wideFilename.c_str());
     }
     SendMessage(hComboBox, CB_SETCURSEL, 0, 0);
+}
+
+void RefreshComboBox(HWND hComboBox, const std::string& directoryPath)
+{
+    // Clear existing entries
+    SendMessage(hComboBox, CB_RESETCONTENT, 0, 0);
+
+    // Repopulate the combobox with updated file list
+    PopulateComboBox(hComboBox, directoryPath);
+}
+
+void MonitorDirectoryChanges(HWND hwnd, HWND hComboBox, const std::string& directoryPath)
+{
+    std::vector<std::string> previousFiles = GetLogFiles(directoryPath);
+
+    while (true)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(2)); // Check every 2 seconds
+
+        std::vector<std::string> currentFiles = GetLogFiles(directoryPath);
+
+        // Compare the current file list with the previous one
+        if (currentFiles != previousFiles)
+        {
+            previousFiles = currentFiles;
+
+            // Refresh the combobox on the main thread
+            PostMessage(hwnd, WM_USER + 1, (WPARAM)hComboBox, 0);
+        }
+    }
 }
