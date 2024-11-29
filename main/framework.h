@@ -17,3 +17,14 @@
 #include <pathcch.h>
 #include <strsafe.h>
 #include <commdlg.h>
+// For GUI/csvFormat/Real Time Update
+#define NOMINMAX
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <iomanip>
+#include <thread>   // For std::thread
+#include <atomic>   // For atomic file size tracking
+#include <iostream>
