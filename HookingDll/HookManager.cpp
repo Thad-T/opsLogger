@@ -17,6 +17,7 @@ void PrintAction(LPCSTR lpAction, LPCSTR lpDesc);
 
 // predefine hooked function below
 HANDLE HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+BOOL HookedWriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
 DWORD HookedProcessW(LPCWSTR lpApplicationName, LPWSTR lpCommandLine, LPSECURITY_ATTRIBUTES lpProcessAttributes, LPSECURITY_ATTRIBUTES lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, LPVOID lpEnvironment, LPCWSTR lpCurrentDirectory, LPSTARTUPINFOW lpStartupInfo, LPPROCESS_INFORMATION lpProcessInformation);
 
 HookManager::HookManager()
@@ -102,6 +103,7 @@ void HookManager::removeHooks()
 	{
 		UnhookFunction((ULONG_PTR)GetProcAddress(hKern32, "CreateProcessW"));
 		UnhookFunction((ULONG_PTR)GetProcAddress(hKernBase, "CreateFileW"));
+		UnhookFunction((ULONG_PTR)GetProcAddress(hKernBase, "WriteFile"));
 	}
 }
 
@@ -133,6 +135,10 @@ void HookManager::hookFunctions()
 		{
 			PrintAction("Initialization", "Failed to hook CreateFileW");
 		}
+		if (!HookFunction((ULONG_PTR)GetProcAddress(hKernBase, "WriteFile"), (ULONG_PTR)HookedWriteFile))
+		{
+			PrintAction("Initialization", "Failed to hook WriteFile");
+		}
 	}
 }
 
@@ -159,6 +165,51 @@ HANDLE HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShar
 		lpSuccess, lpFileNameA, dwDesiredAccess, dwShareMode, dwCreationDisposition, dwFlagsAndAttributes, lpTemplate);
 	
 	PrintAction("Create File", lpDesc);
+	LocalFree(lpDesc);
+	return ret;
+}
+
+BOOL HookedWriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped)
+{
+	BOOL(*OGWriteFile)(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped);
+	OGWriteFile = (BOOL(*)(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, LPDWORD lpNumberOfBytesWritten, LPOVERLAPPED lpOverlapped))HookManager::GetOriginalFunction((ULONG_PTR)HookedWriteFile);
+	
+	if (hFile == hLogFile)
+		return OGWriteFile(hFile, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten, lpOverlapped);
+
+	LPCSTR lpSuccess = "True";
+	char lpFilePath[MAX_PATH] = { 0 };
+	if (GetFinalPathNameByHandleA(hFile, lpFilePath, MAX_PATH, FILE_NAME_NORMALIZED) == 0)
+	{
+		switch (GetLastError())
+		{
+		case ERROR_NOT_ENOUGH_MEMORY:
+			StringCchPrintfA(lpFilePath, MAX_PATH, "Insufficient memory to complete the operation");
+			break;
+
+		case ERROR_PATH_NOT_FOUND:
+			StringCchPrintfA(lpFilePath, MAX_PATH, "Path not found");
+			break;
+
+		case ERROR_INVALID_PARAMETER:
+			StringCchPrintfA(lpFilePath, MAX_PATH, "Invalid flags were specified for dwFlags");
+			break;
+
+		default:
+			StringCchPrintfA(lpFilePath, MAX_PATH, "Unknown error occurred when retrieving file name");
+			break;
+		}
+	}
+	BOOL ret = OGWriteFile(hFile, lpBuffer, nNumberOfBytesToWrite, lpNumberOfBytesWritten, lpOverlapped);
+	if (!ret)
+		lpSuccess = "False";
+
+	DWORD descSz = lstrlenA(lpFilePath) + 70;
+	LPSTR lpDesc = (LPSTR)LocalAlloc(LMEM_ZEROINIT, descSz * sizeof(char));
+	StringCchPrintfA(lpDesc, descSz, "Success: %s;Target File Path: %s;Bytes to Write: %d;Bytes Written: %d",
+		lpSuccess, lpFilePath, nNumberOfBytesToWrite, lpNumberOfBytesWritten);
+
+	PrintAction("Write File", lpDesc);
 	LocalFree(lpDesc);
 	return ret;
 }
@@ -265,7 +316,7 @@ void PrintAction(LPCSTR lpAction, LPCSTR lpDesc)
 	GetSystemTime(&st);
 	GetLocalTime(&lt);
 	LPSTR lpDispBuf;
-	DWORD dispSz = lstrlenA(lpAction) + lstrlenA(lpDesc) + 52;
+	DWORD dispSz = lstrlenA(lpAction) + lstrlenA(lpDesc) + 65;
 	lpDispBuf = (LPSTR)LocalAlloc(LMEM_ZEROINIT, dispSz * sizeof(char));
 	StringCchPrintfA(lpDispBuf, dispSz,
 		("\r\n%04d-%02d-%02d %02d:%02d:%02d:%03d,%04d-%02d-%02d %02d:%02d:%02d:%03d,%s,%s"),
@@ -274,6 +325,6 @@ void PrintAction(LPCSTR lpAction, LPCSTR lpDesc)
 		lpAction, lpDesc);
 
 	WriteFile(hLogFile, lpDispBuf, dispSz * sizeof(char), NULL, NULL);
-
+	
 	LocalFree(lpDispBuf);
 }
