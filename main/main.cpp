@@ -81,6 +81,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
     );
     PopulateComboBox(hComboBox, ".");
 
+    CreateWindow(
+        L"BUTTON",  // Predefined class; Unicode assumed 
+        L"Refresh", // Button text 
+        WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, // Styles 
+        360,         // x position 
+        20,         // y position 
+        100,        // Button width
+        30,         // Button height
+        hwnd,       // Parent window
+        (HMENU)4,   // Control identifier
+        (HINSTANCE)GetWindowLongPtr(hwnd, GWLP_HINSTANCE),
+        NULL);      // No additional application data
+
     // Create a button
     CreateWindow(
         L"BUTTON",  // Predefined class; Unicode assumed 
@@ -174,7 +187,19 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             HWND hEditControl = GetDlgItem(hwnd, 2);
             UpdateFileContent(hwnd, directoryPath, hEditControl);
         }
-        if (HIWORD(wParam) == CBN_SELCHANGE && LOWORD(wParam) == 3) // 3 is the combobox ID
+        else if (LOWORD(wParam) == 4) // Refresh button
+        {
+            // Refresh the file list in the combobox
+            if (hComboBox != NULL)
+            {
+                RefreshComboBox(hComboBox, directoryPath);
+
+                // Optional: Also refresh the displayed content
+                HWND hEditControl = GetDlgItem(hwnd, 2);
+                UpdateFileContent(hwnd, directoryPath, hEditControl);
+            }
+        }
+        else if (HIWORD(wParam) == CBN_SELCHANGE && LOWORD(wParam) == 3) // 3 is the combobox ID
         {
             // Get the selected item index
             int index = SendMessage((HWND)lParam, CB_GETCURSEL, 0, 0);
