@@ -10,8 +10,10 @@ void PopulateComboBox(HWND hComboBox, const std::string& directoryPath);
 void RefreshComboBox(HWND hComboBox, const std::string& directoryPath);
 void MonitorDirectoryChanges(HWND hwnd, HWND hComboBox, const std::string& directoryPath);
 std::vector<std::string> GetLogFiles(const std::string& directoryPath);
+std::string GetExecutablePath();
 // Global variable to track the file size for change detection
 std::atomic<long> totalFileSize(0);
+std::string directoryPath = GetExecutablePath();
 
 BOOL WINAPI InjectNewProc(__in LPCWSTR lpcwszDLL, __in LPCWSTR targetPath, LPCWSTR lpCurrentDir, HWND hwnd);
 void PrintError(const char* lpFunction, HWND hwnd);
@@ -97,8 +99,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int nCmdShow
     UpdateWindow(hwnd);
 
     // Monitor the log file for changes in a separate thread
-    std::string directoryPath = "."; // Current directory
-    std::thread directoryMonitorThread(MonitorDirectoryChanges, hwnd, hComboBox, ".");
+    // std::string directoryPath = "."; // Current directory
+    std::thread directoryMonitorThread(MonitorDirectoryChanges, hwnd, hComboBox, directoryPath);
     directoryMonitorThread.detach();
     std::thread fileMonitorThread(MonitorFileChanges, hwnd, directoryPath, hEditControl);
     fileMonitorThread.detach();
@@ -121,7 +123,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     case WM_USER + 1: // Custom message for refreshing the combobox
         if (hComboBox != NULL)
         {
-            RefreshComboBox(hComboBox, ".");
+            RefreshComboBox(hComboBox, directoryPath);
         }
         break;
     case WM_DESTROY:
@@ -168,7 +170,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
             else
                 MessageBox(hwnd, L"Failed", L"Button Click", MB_OK);
 
-            std::string directoryPath = "."; // Current directory
+            // std::string directoryPath = "."; // Current directory
             HWND hEditControl = GetDlgItem(hwnd, 2);
             UpdateFileContent(hwnd, directoryPath, hEditControl);
         }
@@ -184,14 +186,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 std::wstring wideFileName(selectedFile);
                 std::string selectedFilename(wideFileName.begin(), wideFileName.end());
 
-                std::string filePath = "./" + selectedFilename; // Adjust for your directory structure
+                std::string filePath = directoryPath + selectedFilename; // Adjust for your directory structure
                 std::ifstream file(filePath);
                 HWND hEditControl = GetDlgItem(hwnd, 2);
 
                 if (selectedFilename == "All Files")
                 {
                     std::wstringstream combinedContent;
-                    std::vector<std::string> logFiles = GetLogFiles(".");
+                    std::vector<std::string> logFiles = GetLogFiles(directoryPath);
 
                     for (const auto& filePath : logFiles)
                     {
@@ -213,7 +215,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
                 else
                 {
                     // View selected file
-                    std::string filePath = "./" + selectedFilename; 
+                    std::string filePath = directoryPath + "//" + selectedFilename;
                     std::ifstream file(filePath);
                     if (file.is_open())
                     {
@@ -344,7 +346,7 @@ std::vector<std::string> GetLogFiles(const std::string& directoryPath)
                 // Convert wide file name to narrow string
                 std::wstring wideFileName = findData.cFileName;
                 std::string fileName(wideFileName.begin(), wideFileName.end());
-                logFiles.push_back(directoryPath + "\\" + fileName);
+                logFiles.push_back(directoryPath + "//" + fileName);
             }
         } while (FindNextFileW(hFind, &findData));
         FindClose(hFind);
@@ -520,4 +522,11 @@ void MonitorDirectoryChanges(HWND hwnd, HWND hComboBox, const std::string& direc
             PostMessage(hwnd, WM_USER + 1, (WPARAM)hComboBox, 0);
         }
     }
+}
+
+std::string GetExecutablePath() {
+    char buffer[MAX_PATH];
+    GetModuleFileNameA(NULL, buffer, MAX_PATH); // Use the narrow version
+    std::string fullPath(buffer);
+    return fullPath.substr(0, fullPath.find_last_of("\\/"));
 }
