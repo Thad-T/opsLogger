@@ -161,7 +161,8 @@ HANDLE HookedCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShar
 
 	DWORD descSz = lstrlenA(lpSuccess) + lstrlenA(lpFileNameA) + lstrlenA(lpTemplate) + 119;
 	LPSTR lpDesc = (LPSTR)LocalAlloc(LMEM_ZEROINIT, descSz * sizeof(char));
-	StringCchPrintfA(lpDesc, descSz, "Success: %s;File Name: %s;Desired Access: %X;Share Mode: %X;Disposition: %X;Flags and Attributes: %X;Template File: %s",
+	StringCchPrintfExA(lpDesc, descSz, NULL, NULL, 0x00000220,
+		"Success: %s;File Name: %s;Desired Access: %X;Share Mode: %X;Disposition: %X;Flags and Attributes: %X;Template File: %s",
 		lpSuccess, lpFileNameA, dwDesiredAccess, dwShareMode, dwCreationDisposition, dwFlagsAndAttributes, lpTemplate);
 	
 	PrintAction("Create File", lpDesc);
@@ -206,7 +207,8 @@ BOOL HookedWriteFile(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite
 
 	DWORD descSz = lstrlenA(lpFilePath) + 70;
 	LPSTR lpDesc = (LPSTR)LocalAlloc(LMEM_ZEROINIT, descSz * sizeof(char));
-	StringCchPrintfA(lpDesc, descSz, "Success: %s;Target File Path: %s;Bytes to Write: %d;Bytes Written: %d",
+	StringCchPrintfExA(lpDesc, descSz, NULL, NULL, 0x00000220,
+		"Success: %s;Target File Path: %s;Bytes to Write: %d;Bytes Written: %d",
 		lpSuccess, lpFilePath, nNumberOfBytesToWrite, lpNumberOfBytesWritten);
 
 	PrintAction("Write File", lpDesc);
@@ -239,7 +241,8 @@ DWORD HookedProcessW(LPCWSTR lpApplicationName, LPWSTR lpCommandLine, LPSECURITY
 
 	DWORD descSz = lstrlenA(lpSuccess) + lstrlenA(lpAppNameA) + lstrlenA(lpCurrentDirA) + lstrlenA(lpCmdLineA) + 86;
 	LPSTR lpDesc = (LPSTR)LocalAlloc(LMEM_ZEROINIT, descSz * sizeof(char));
-	StringCchPrintfA(lpDesc, descSz, "Success: %s;Application Name: %s;Command Line: %s;Current Directory: %s;Child PID: %d",
+	StringCchPrintfExA(lpDesc, descSz, NULL, NULL, 0x00000220,
+		"Success: %s;Application Name: %s;Command Line: %s;Current Directory: %s;Child PID: %d",
 		lpSuccess, lpAppNameA, lpCmdLineA, lpCurrentDirA, dwChildPid);
 
 	PrintAction("Create Process", lpDesc);
@@ -316,15 +319,16 @@ void PrintAction(LPCSTR lpAction, LPCSTR lpDesc)
 	GetSystemTime(&st);
 	GetLocalTime(&lt);
 	LPSTR lpDispBuf;
+	char *lpDispBufEx;
 	DWORD dispSz = lstrlenA(lpAction) + lstrlenA(lpDesc) + 65;
 	lpDispBuf = (LPSTR)LocalAlloc(LMEM_ZEROINIT, dispSz * sizeof(char));
-	StringCchPrintfA(lpDispBuf, dispSz,
+	StringCchPrintfExA(lpDispBuf, dispSz, &lpDispBufEx, NULL, 0x00000220,
 		("\r\n%04d-%02d-%02d %02d:%02d:%02d:%03d,%04d-%02d-%02d %02d:%02d:%02d:%03d,%s,%s"),
 		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds,
 		lt.wYear, lt.wMonth, lt.wDay, lt.wHour, lt.wMinute, lt.wSecond, lt.wMilliseconds,
 		lpAction, lpDesc);
-
+	lpDispBufEx[0] = ' ';
 	WriteFile(hLogFile, lpDispBuf, dispSz * sizeof(char), NULL, NULL);
-	
+	SetEndOfFile(hLogFile);
 	LocalFree(lpDispBuf);
 }
